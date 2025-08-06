@@ -1,18 +1,20 @@
+# Use official Node.js image
 FROM node:20-alpine
 
+# Set working directory
 WORKDIR /app
 
-# Install dependencies
+# Copy package.json and package-lock.json
 COPY package*.json ./
-RUN npm install
 
-# Install nodemon globally (optional)
-RUN npm install -g nodemon
+# Install only production dependencies
+RUN npm install --omit=dev
 
-# Copy the rest of the files
+# Copy all project files
 COPY . .
 
+# Expose the port if your server uses 3000
 EXPOSE 3000
 
-# Start in development mode
-CMD ["npm", "run", "dev"]
+# Run the server
+CMD ["npm", "start"]
