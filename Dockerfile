@@ -1,25 +1,18 @@
-# Use the official Node.js runtime as the base image
-FROM node:18-alpine
+FROM node:20-alpine
 
-# Set the working directory inside the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json (if available) to the working directory
+# Install dependencies
 COPY package*.json ./
+RUN npm install
 
-# Install the application dependencies
-RUN npm ci --only=production
+# Install nodemon globally (optional)
+RUN npm install -g nodemon
 
-# Copy the rest of the application code to the working directory
+# Copy the rest of the files
 COPY . .
 
-# Expose the port that the application listens on
 EXPOSE 3000
 
-# Create a non-root user and switch to it for security
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
-USER nextjs
-
-# Command to run the application
-CMD ["node", "server.js"]
+# Start in development mode
+CMD ["npm", "run", "dev"]
