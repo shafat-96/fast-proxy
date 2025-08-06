@@ -98,6 +98,25 @@ Cache headers:
 - `X-Cache: HIT` - Response was served from cache
 - `X-Cache: MISS` - Response was fetched from the origin server
 
+## Docker
+
+You can also run this proxy server using Docker:
+
+1. Build the Docker image:
+   ```bash
+   docker build -t m3u8-proxy .
+   ```
+
+2. Run the container:
+   ```bash
+   docker run -p 3000:3000 -e HOST=0.0.0.0 -e PORT=3000 m3u8-proxy
+   ```
+
+3. Or run with custom environment variables:
+   ```bash
+   docker run -p 3000:3000 -e HOST=0.0.0.0 -e PORT=3000 -e ALLOWED_ORIGINS=https://yourdomain.com m3u8-proxy
+   ```
+
 ## How It Works
 
 1. The M3U8 proxy fetches the playlist and rewrites all URLs to point back to this proxy server
