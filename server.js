@@ -59,16 +59,12 @@ app.get('/', (req, res) => {
 app.get('/proxy', m3u8ProxyHandler);
 app.get('/ts-proxy', tsProxyHandler);
 
-// Start server for local development
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(port, host, () => {
-    console.log(`M3U8 Proxy Server running at http://${host}:${port}`);
-    if (allowedOrigins.length > 0) {
-      console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
-    } else {
-      console.log('Allowed origins: All (*)');
-    }
-  });
-}
-
-export default app;
+// Start server
+app.listen(port, host, () => {
+  console.log(`M3U8 Proxy Server running at http://${host}:${port}`);
+  if (allowedOrigins.length > 0) {
+    console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
+  } else {
+    console.log('Allowed origins: All (*)');
+  }
+});
