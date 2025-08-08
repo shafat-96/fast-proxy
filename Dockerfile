@@ -1,20 +1,18 @@
-# Use official Node.js image
+# Use a lightweight official Node.js image
 FROM node:20-alpine
 
-# Set working directory
+# Set working directory inside the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json
+# Copy package.json and package-lock.json for caching npm install layers
 COPY package*.json ./
 
-# Install only production dependencies
-RUN npm install --omit=dev
+# Install only production dependencies (omit dev dependencies)
+RUN npm ci --omit=dev
 
-# Copy all project files
 COPY . .
 
-# Expose the port if your server uses 3000
 EXPOSE 3000
 
-# Run the server
+# Start your server
 CMD ["npm", "start"]
