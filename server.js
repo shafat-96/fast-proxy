@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { m3u8ProxyHandler, tsProxyHandler } from './proxyHandlers.js';
+import { fetchHandler } from './fetchHandler.js';
 
 dotenv.config();
 
@@ -50,7 +51,8 @@ app.get('/', (req, res) => {
     message: 'M3U8 Cross-Origin Proxy Server', 
     endpoints: {
       m3u8: '/proxy?url={m3u8_url}&headers={optional_headers}',
-      ts: '/ts-proxy?url={ts_segment_url}&headers={optional_headers}'
+      ts: '/ts-proxy?url={ts_segment_url}&headers={optional_headers}',
+      fetch: '/fetch?url={any_url}&ref={optional_referer}'
     },
     allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : 'All (*)'
   });
@@ -58,6 +60,7 @@ app.get('/', (req, res) => {
 
 app.get('/proxy', m3u8ProxyHandler);
 app.get('/ts-proxy', tsProxyHandler);
+app.get('/fetch', fetchHandler);
 
 // Start server
 app.listen(port, host, () => {
