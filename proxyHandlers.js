@@ -155,3 +155,63 @@ export async function tsProxyHandler(req, res) {
     sendError(res, 'Failed to proxy segment', error.message);
   }
 }
+
+export async function mp4ProxyHandler(req, res) {
+  try {
+    const { url, parsedHeaders } = validateRequest(req);
+
+    // Forward Range header if provided by the client
+    const rangeHeader = req.headers['range'];
+
+    const requestHeaders = generateRequestHeaders(url, {
+      ...parsedHeaders,
+      ...(rangeHeader ? { Range: rangeHeader } : {}),
+    });
+
+    // Stream the response; let axios handle redirects (default max 5)
+    const response = await axios({
+      method: 'GET',
+      url,
+      headers: requestHeaders,
+      responseType: 'stream',
+      validateStatus: () => true, // we will forward the status (e.g., 206)
+      maxRedirects: 5,
+    });
+
+    // Set CORS and pass-through important headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Range');
+
+    // Use upstream headers when available
+    const upstreamType = response.headers['content-type'] || 'video/mp4';
+    const upstreamLength = response.headers['content-length'];
+    const upstreamRange = response.headers['content-range'];
+    const upstreamAcceptRanges = response.headers['accept-ranges'] || 'bytes';
+
+    res.setHeader('Content-Type', upstreamType);
+    if (upstreamLength) res.setHeader('Content-Length', upstreamLength);
+    if (upstreamRange) res.setHeader('Content-Range', upstreamRange);
+    if (upstreamAcceptRanges) res.setHeader('Accept-Ranges', upstreamAcceptRanges);
+    res.setHeader('Content-Disposition', 'inline');
+
+    // Forward status (e.g., 200 or 206 Partial Content)
+    res.status(response.status);
+
+    response.data.on('error', (err) => {
+      // In case streaming fails mid-way
+      if (!res.headersSent) {
+        sendError(res, 'Upstream stream error', err.message);
+      } else {
+        res.destroy(err);
+      }
+    });
+
+    response.data.pipe(res);
+  } catch (error) {
+    if (error.message === 'URL parameter is required') {
+      return res.status(400).json({ error: error.message });
+    }
+    sendError(res, 'Failed to proxy mp4 content', error.message);
+  }
+}

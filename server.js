@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { m3u8ProxyHandler, tsProxyHandler } from './proxyHandlers.js';
+import { m3u8ProxyHandler, tsProxyHandler, mp4ProxyHandler } from './proxyHandlers.js';
 
 dotenv.config();
 
@@ -51,7 +51,8 @@ app.get('/', (req, res) => {
     endpoints: {
       m3u8: '/proxy?url={m3u8_url}&headers={optional_headers}',
       ts: '/ts-proxy?url={ts_segment_url}&headers={optional_headers}',
-      fetch: '/fetch?url={any_url}&ref={optional_referer}'
+      fetch: '/fetch?url={any_url}&ref={optional_referer}',
+      mp4: '/mp4-proxy?url={mp4_url}&headers={optional_headers}'
     },
     allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : 'All (*)'
   });
@@ -59,6 +60,7 @@ app.get('/', (req, res) => {
 
 app.get('/proxy', m3u8ProxyHandler);
 app.get('/ts-proxy', tsProxyHandler);
+app.get('/mp4-proxy', mp4ProxyHandler);
 app.get("/fetch", async (req, res) => {
   try {
     const { url, ref } = req.query;

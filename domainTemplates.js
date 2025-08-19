@@ -1439,6 +1439,24 @@ export const domainTemplates = [
     }
   },
 
+  {
+    pattern: /hakunaymatata\.com$/i,
+    headers: {
+      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) Gecko/20100101 Firefox/137.0',
+      'accept': '*/*',
+      'accept-language': 'en-US,en;q=0.5',
+      'sec-fetch-dest': 'empty',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-site': 'cross-site',
+    },
+    headersFn: (url) => {
+      return {
+        'origin': 'https://moviebox.ph',
+        'referer': 'https://moviebox.ph/',
+      };
+    }
+  },
+
   // General default template
   {
     pattern: /.*/,
