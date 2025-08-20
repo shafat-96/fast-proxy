@@ -63,8 +63,15 @@ export async function m3u8ProxyHandler(req, res) {
           const uriMatch = line.match(/URI="([^"]+)"/);
           if (uriMatch && uriMatch[1]) {
             const originalUri = uriMatch[1];
+            // Resolve relative key URIs against the playlist URL
+            let resolvedKeyUrl = originalUri;
+            try {
+              resolvedKeyUrl = new URL(originalUri, url).href;
+            } catch (_) {
+              // keep original if resolution fails
+            }
             const encodedHeaders = encodeURIComponent(JSON.stringify(requestHeaders));
-            const newUri = `${webServerUrl}/ts-proxy?url=${encodeURIComponent(originalUri)}&headers=${encodedHeaders}`;
+            const newUri = `${webServerUrl}/ts-proxy?url=${encodeURIComponent(resolvedKeyUrl)}&headers=${encodedHeaders}`;
             newLines.push(line.replace(originalUri, newUri));
           } else {
             newLines.push(line);
@@ -118,15 +125,22 @@ export async function tsProxyHandler(req, res) {
       method: 'GET',
       url,
       headers: requestHeaders,
-      responseType: 'stream'
+      responseType: 'stream',
+      validateStatus: () => true,
+      maxRedirects: 5,
     });
 
     res.header('X-Cache', 'MISS');
-    res.header('Cache-Control', 'public, max-age=300');
-    if (url.endsWith('.ts')) {
+    // Prefer upstream content type; fallback by extension
+    const upstreamContentType = response.headers && response.headers['content-type'];
+    if (upstreamContentType) {
+      res.header('Content-Type', upstreamContentType);
+    } else if (url.endsWith('.ts')) {
       res.header('Content-Type', 'video/mp2t');
     } else if (url.endsWith('.m3u8')) {
       res.header('Content-Type', 'application/vnd.apple.mpegurl');
+    } else if (url.match(/\.(jpe?g|png|gif|webp|bmp|svg)(?:\?|#|$)/i)) {
+      res.header('Content-Type', 'image/jpeg');
     } else {
       res.header('Content-Type', 'application/octet-stream');
     }
@@ -135,7 +149,7 @@ export async function tsProxyHandler(req, res) {
     const responseData = {
       status: response.status,
       headers: {
-        'Content-Type': response.headers['content-type'],
+        'Content-Type': (response.headers && response.headers['content-type']) || 'application/octet-stream',
         'Cache-Control': 'public, max-age=300'
       },
       data: []
@@ -144,7 +158,10 @@ export async function tsProxyHandler(req, res) {
     response.data.on('data', chunk => responseData.data.push(chunk));
     response.data.on('end', () => {
       responseData.data = Buffer.concat(responseData.data);
-      segmentCache.set(cacheKey, responseData);
+      // Only cache successful responses (2xx)
+      if (response.status >= 200 && response.status < 300) {
+        segmentCache.set(cacheKey, responseData);
+      }
     });
 
     response.data.pipe(res);
@@ -152,6 +169,7 @@ export async function tsProxyHandler(req, res) {
     if (error.message === 'URL parameter is required') {
       return res.status(400).json({ error: error.message });
     }
+    // If axios threw before we could get a response, return 502 with message
     sendError(res, 'Failed to proxy segment', error.message);
   }
 }
