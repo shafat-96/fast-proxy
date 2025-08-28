@@ -1,9 +1,7 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import { m3u8ProxyHandler, tsProxyHandler, mp4ProxyHandler } from './proxyHandlers.js';
-
-dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
