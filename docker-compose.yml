@@ -8,6 +8,14 @@ services:
       NODE_ENV: production
     deploy:
       replicas: 2
+      resources:
+        limits:
+          cpus: "1"
+          memory: "1000M"
+        reservations:
+          cpus: "0.2"
+          memory: "256M"
+
     restart: always
     env_file:
       - .env
