@@ -1,5 +1,4 @@
 import axios from 'axios';
-import segmentCache from './cache.js';
 import { generateHeadersForDomain } from './domainTemplates.js';
 
 const webServerUrl = process.env.PUBLIC_URL || `http://${process.env.HOST || 'localhost'}:${process.env.PORT || 3000}`;
@@ -109,17 +108,6 @@ export async function tsProxyHandler(req, res) {
   try {
     const { url, parsedHeaders } = validateRequest(req);
     const requestHeaders = generateRequestHeaders(url, parsedHeaders);
-    const cacheKey = `ts:${url}`;
-    const cachedData = segmentCache.get(cacheKey);
-
-    if (cachedData) {
-      res.header('X-Cache', 'HIT');
-      res.status(cachedData.status);
-      for (const [key, value] of Object.entries(cachedData.headers)) {
-        res.header(key, value);
-      }
-      return res.send(cachedData.data);
-    }
 
     const response = await axios({
       method: 'GET',
@@ -130,7 +118,6 @@ export async function tsProxyHandler(req, res) {
       maxRedirects: 5,
     });
 
-    res.header('X-Cache', 'MISS');
     // Prefer upstream content type; fallback by extension
     const upstreamContentType = response.headers && response.headers['content-type'];
     if (upstreamContentType) {
@@ -145,24 +132,6 @@ export async function tsProxyHandler(req, res) {
       res.header('Content-Type', 'application/octet-stream');
     }
     res.status(response.status);
-
-    const responseData = {
-      status: response.status,
-      headers: {
-        'Content-Type': (response.headers && response.headers['content-type']) || 'application/octet-stream',
-        'Cache-Control': 'public, max-age=300'
-      },
-      data: []
-    };
-
-    response.data.on('data', chunk => responseData.data.push(chunk));
-    response.data.on('end', () => {
-      responseData.data = Buffer.concat(responseData.data);
-      // Only cache successful responses (2xx)
-      if (response.status >= 200 && response.status < 300) {
-        segmentCache.set(cacheKey, responseData);
-      }
-    });
 
     response.data.pipe(res);
   } catch (error) {
