@@ -21,11 +21,20 @@ services:
       - .env
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.ngproxy.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.ngproxy.rule=Host(`proxy.vidnest.fun`)"
       - "traefik.http.routers.ngproxy.entrypoints=web"
       - "traefik.http.services.ngproxy.loadbalancer.server.port=3000"
-      - "traefik.http.routers.ngproxy.middlewares=strip-api"
+      - "traefik.http.routers.ngproxy.middlewares=redirect-to-https"
       - "traefik.http.middlewares.strip-api.stripprefix.prefixes=/api"
+      # HTTPS router for proxy.vidnest.fun
+      - "traefik.http.routers.ngproxy-secure.rule=Host(`proxy.vidnest.fun`)"
+      - "traefik.http.routers.ngproxy-secure.entrypoints=websecure"
+      - "traefik.http.routers.ngproxy-secure.tls=true"
+      - "traefik.http.routers.ngproxy-secure.tls.certresolver=leresolver"
+      - "traefik.http.routers.ngproxy-secure.middlewares=strip-api"
+      # HTTP -> HTTPS redirect middleware
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
 
   traefik:
     image: traefik:v2.10
@@ -36,7 +45,7 @@ services:
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--certificatesresolvers.leresolver.acme.tlschallenge=true"
-      - "--certificatesresolvers.leresolver.acme.email=your@email.com"
+      - "--certificatesresolvers.leresolver.acme.email=gamingsss628@gmail.com"
       - "--certificatesresolvers.leresolver.acme.storage=/letsencrypt/acme.json"
     ports:
       - "80:80"
