@@ -8,58 +8,60 @@ services:
       NODE_ENV: production
     deploy:
       replicas: 2
+      endpoint_mode: dnsrr
       resources:
         limits:
-          cpus: "2.1"  # ~70% of 6 cores across 2 replicas (~4.2 total)
-          memory: "1000M"
+          cpus: "2.0"
+          memory: "3584M"
         reservations:
           cpus: "0.5"
-          memory: "256M"
+          memory: "512M"
 
     restart: always
     env_file:
       - .env
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.ngproxy.rule=Host(`proxy.vidnest.fun`)"
-      - "traefik.http.routers.ngproxy.entrypoints=web"
-      - "traefik.http.services.ngproxy.loadbalancer.server.port=3000"
-      - "traefik.http.routers.ngproxy.middlewares=redirect-to-https"
-      - "traefik.http.middlewares.strip-api.stripprefix.prefixes=/api"
-      # HTTPS router for proxy.vidnest.fun
-      - "traefik.http.routers.ngproxy-secure.rule=Host(`proxy.vidnest.fun`)"
-      - "traefik.http.routers.ngproxy-secure.entrypoints=websecure"
-      - "traefik.http.routers.ngproxy-secure.tls=true"
-      - "traefik.http.routers.ngproxy-secure.tls.certresolver=leresolver"
-      - "traefik.http.routers.ngproxy-secure.middlewares=strip-api"
-      # HTTP -> HTTPS redirect middleware
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+    # Expose port 3000 to the internal network; Nginx will proxy to this
+    expose:
+      - "3000"
 
-  traefik:
-    image: traefik:v2.10
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.leresolver.acme.tlschallenge=true"
-      - "--certificatesresolvers.leresolver.acme.email=gamingsss628@gmail.com"
-      - "--certificatesresolvers.leresolver.acme.storage=/letsencrypt/acme.json"
+  nginx:
+    image: nginx:1.25
+    depends_on:
+      - server
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"  # Traefik dashboard
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./letsencrypt:/letsencrypt
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./letsencrypt:/etc/letsencrypt
+      - ./certbot-www:/var/www/certbot
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: "512M"
+        reservations:
+          cpus: "0.1"
+          memory: "256M"
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: always
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=PathPrefix(`/traefik`)"
-      - "traefik.http.routers.traefik.entrypoints=web"
-      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot
+    volumes:
+      - ./letsencrypt:/etc/letsencrypt
+      - ./certbot-www:/var/www/certbot
+    entrypoint: sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot && echo 'Renew checked'; sleep 12h & wait $!; done"
+    depends_on:
+      - nginx
+    restart: always
 
   autoheal:
     image: willfarrell/autoheal:latest
