@@ -1,35 +1,50 @@
 import axios from 'axios';
+import type { Request, Response } from 'express';
 import { generateHeadersForDomain } from './domainTemplates.js';
 
-const webServerUrl = process.env.PUBLIC_URL || `http://${process.env.HOST || 'localhost'}:${process.env.PORT || 3000}`;
+const webServerUrl =
+  process.env.PUBLIC_URL || `http://${process.env.HOST || 'localhost'}:${process.env.PORT || 3000}`;
+
+// Normalize a header bag to Record<string, string>
+function normalizeHeaders(h: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(h)) {
+    if (typeof v === 'string') out[k] = v;
+  }
+  return out;
+}
 
 // Helper to generate request headers
-function generateRequestHeaders(url, additionalHeaders = {}) {
-  let requestHeaders = {};
+function generateRequestHeaders(
+  url: string,
+  additionalHeaders: Record<string, string | undefined> = {},
+) {
+  let requestHeaders: Record<string, string> = {};
   try {
     const urlObj = new URL(url);
-    requestHeaders = generateHeadersForDomain(urlObj);
-    Object.assign(requestHeaders, additionalHeaders);
+    const base = generateHeadersForDomain(urlObj);
+    requestHeaders = { ...base, ...normalizeHeaders(additionalHeaders as Record<string, unknown>) };
   } catch (urlError) {
-    requestHeaders = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      'Accept': '*/*',
+    const defaults = {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      Accept: '*/*',
       'Accept-Language': 'en-US,en;q=0.9',
       'Accept-Encoding': 'gzip, deflate',
-      'Connection': 'keep-alive',
-      ...additionalHeaders
-    };
+      Connection: 'keep-alive',
+    } as const;
+    requestHeaders = { ...defaults, ...normalizeHeaders(additionalHeaders as Record<string, unknown>) };
   }
   return requestHeaders;
 }
 
 // Common handler for URL and headers validation
-function validateRequest(req) {
-  const { url, headers } = req.query;
+function validateRequest(req: Request) {
+  const { url, headers } = req.query as { url?: string; headers?: string };
   if (!url) {
     throw new Error('URL parameter is required');
   }
-  let parsedHeaders = {};
+  let parsedHeaders: Record<string, string> = {};
   if (headers) {
     try {
       parsedHeaders = JSON.parse(decodeURIComponent(headers));
@@ -37,24 +52,24 @@ function validateRequest(req) {
       // Ignore invalid headers
     }
   }
-  return { url, parsedHeaders };
+  return { url, parsedHeaders } as { url: string; parsedHeaders: Record<string, string> };
 }
 
 // Common error response handler
-function sendError(res, message, details) {
+function sendError(res: Response, message: string, details?: unknown) {
   console.error(`${message}:`, details);
   res.status(500).json({ error: message, details });
 }
 
-export async function m3u8ProxyHandler(req, res) {
+export async function m3u8ProxyHandler(req: Request, res: Response) {
   try {
     const { url, parsedHeaders } = validateRequest(req);
     const requestHeaders = generateRequestHeaders(url, parsedHeaders);
-    const response = await axios.get(url, { headers: requestHeaders });
+    const response = await axios.get<string>(url, { headers: requestHeaders });
 
     let m3u8Content = response.data;
     const lines = m3u8Content.split('\n');
-    const newLines = [];
+    const newLines: string[] = [];
 
     for (const line of lines) {
       if (line.startsWith('#')) {
@@ -96,15 +111,15 @@ export async function m3u8ProxyHandler(req, res) {
 
     res.header('Content-Type', 'application/vnd.apple.mpegurl');
     res.send(newLines.join('\n'));
-  } catch (error) {
+  } catch (error: any) {
     if (error.message === 'URL parameter is required') {
       return res.status(400).json({ error: error.message });
     }
-    sendError(res, 'Failed to proxy m3u8 content', error.message);
+    sendError(res, 'Failed to proxy m3u8 content', error?.message ?? String(error));
   }
 }
 
-export async function tsProxyHandler(req, res) {
+export async function tsProxyHandler(req: Request, res: Response) {
   try {
     const { url, parsedHeaders } = validateRequest(req);
     const requestHeaders = generateRequestHeaders(url, parsedHeaders);
@@ -119,7 +134,7 @@ export async function tsProxyHandler(req, res) {
     });
 
     // Prefer upstream content type; fallback by extension
-    const upstreamContentType = response.headers && response.headers['content-type'];
+    const upstreamContentType = response.headers && (response.headers['content-type'] as string | undefined);
     if (upstreamContentType) {
       res.header('Content-Type', upstreamContentType);
     } else if (url.endsWith('.ts')) {
@@ -134,21 +149,21 @@ export async function tsProxyHandler(req, res) {
     res.status(response.status);
 
     response.data.pipe(res);
-  } catch (error) {
+  } catch (error: any) {
     if (error.message === 'URL parameter is required') {
       return res.status(400).json({ error: error.message });
     }
     // If axios threw before we could get a response, return 502 with message
-    sendError(res, 'Failed to proxy segment', error.message);
+    sendError(res, 'Failed to proxy segment', error?.message ?? String(error));
   }
 }
 
-export async function mp4ProxyHandler(req, res) {
+export async function mp4ProxyHandler(req: Request, res: Response) {
   try {
     const { url, parsedHeaders } = validateRequest(req);
 
     // Forward Range header if provided by the client
-    const rangeHeader = req.headers['range'];
+    const rangeHeader = req.headers['range'] as string | undefined;
 
     const requestHeaders = generateRequestHeaders(url, {
       ...parsedHeaders,
@@ -171,10 +186,10 @@ export async function mp4ProxyHandler(req, res) {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Range');
 
     // Use upstream headers when available
-    const upstreamType = response.headers['content-type'] || 'video/mp4';
-    const upstreamLength = response.headers['content-length'];
-    const upstreamRange = response.headers['content-range'];
-    const upstreamAcceptRanges = response.headers['accept-ranges'] || 'bytes';
+    const upstreamType = (response.headers['content-type'] as string | undefined) || 'video/mp4';
+    const upstreamLength = response.headers['content-length'] as string | undefined;
+    const upstreamRange = response.headers['content-range'] as string | undefined;
+    const upstreamAcceptRanges = (response.headers['accept-ranges'] as string | undefined) || 'bytes';
 
     res.setHeader('Content-Type', upstreamType);
     if (upstreamLength) res.setHeader('Content-Length', upstreamLength);
@@ -185,7 +200,7 @@ export async function mp4ProxyHandler(req, res) {
     // Forward status (e.g., 200 or 206 Partial Content)
     res.status(response.status);
 
-    response.data.on('error', (err) => {
+    response.data.on('error', (err: Error) => {
       // In case streaming fails mid-way
       if (!res.headersSent) {
         sendError(res, 'Upstream stream error', err.message);
@@ -195,10 +210,10 @@ export async function mp4ProxyHandler(req, res) {
     });
 
     response.data.pipe(res);
-  } catch (error) {
+  } catch (error: any) {
     if (error.message === 'URL parameter is required') {
       return res.status(400).json({ error: error.message });
     }
-    sendError(res, 'Failed to proxy mp4 content', error.message);
+    sendError(res, 'Failed to proxy mp4 content', error?.message ?? String(error));
   }
 }
