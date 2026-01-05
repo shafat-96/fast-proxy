@@ -1,6 +1,5 @@
 import axios from 'axios';
 import type { Request, Response } from 'express';
-import { generateHeadersForDomain } from './domainTemplates.js';
 
 const webServerUrl =
   process.env.PUBLIC_URL || `http://${process.env.HOST || 'localhost'}:${process.env.PORT || 3000}`;
@@ -19,22 +18,15 @@ function generateRequestHeaders(
   url: string,
   additionalHeaders: Record<string, string | undefined> = {},
 ) {
-  let requestHeaders: Record<string, string> = {};
-  try {
-    const urlObj = new URL(url);
-    const base = generateHeadersForDomain(urlObj);
-    requestHeaders = { ...base, ...normalizeHeaders(additionalHeaders as Record<string, unknown>) };
-  } catch (urlError) {
-    const defaults = {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      Accept: '*/*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept-Encoding': 'gzip, deflate',
-      Connection: 'keep-alive',
-    } as const;
-    requestHeaders = { ...defaults, ...normalizeHeaders(additionalHeaders as Record<string, unknown>) };
-  }
+  const defaults = {
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    Accept: '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate',
+    Connection: 'keep-alive',
+  } as const;
+  const requestHeaders = { ...defaults, ...normalizeHeaders(additionalHeaders as Record<string, unknown>) };
   return requestHeaders;
 }
 
